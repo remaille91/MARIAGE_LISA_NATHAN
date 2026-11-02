@@ -1492,18 +1492,34 @@ export default function App() {
 
             <footer className="py-10 px-4 text-center relative z-10 glass-light border-t border-amber-100/20 hero-text-shadow">
               <p className="font-serif-luxury text-3xl text-white mb-1">Lisa &amp; Nathan</p>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-amber-100/90 mb-5">1er Mai 2027 • Mont-Saint-Guibert</p>
-              <button
-                onClick={() => setCurrentView('admin')}
-                className="inline-flex items-center gap-1.5 text-[11px] text-amber-100/75 hover:text-white transition-colors cursor-pointer"
-              >
-                <Lock className="w-3 h-3" />
-                <span>Accès Mariés (/admin)</span>
-              </button>
-            </footer>
-          </main>
-        ) : (
-          /* BACKOFFICE MARIÉS (/admin) */
+              <p className="text-[11px] uppercase tracking-[0.25em] text-amber-100/90 mb-5">
+                1er Mai 2027 • Mont-Saint-Guibert
+              </p>
+
+              <div className="flex flex-col items-center gap-3">
+                <button
+                  onClick={() => setCurrentView('admin')}
+                  className="inline-flex items-center gap-1.5 text-[11px] text-amber-100/75 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Accès Mariés (/admin)</span>
+                </button>
+
+                {/* Lien promotionnel RM BOOTH */}
+                <a
+                  href="https://www.rmbooth.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-amber-200/90 hover:text-white underline underline-offset-4 decoration-amber-300/50 hover:decoration-white transition-all pt-2 border-t border-amber-100/15"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <span>Vous aussi, créez un site sur mesure pour vos faire-part de mariage</span>
+                  <ExternalLink className="w-3 h-3 opacity-75 shrink-0" />
+                </a>
+             </div>
+    </footer>
+) : (
+/* BACKOFFICE MARIÉS (/admin) */
           <section className="relative z-10 min-h-screen pt-4 pb-28 sm:py-10 px-3.5 sm:px-8 max-w-6xl mx-auto">
             <div className="flex items-center justify-between gap-2 mb-5 sm:mb-8">
               <button
