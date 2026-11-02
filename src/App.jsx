@@ -57,6 +57,22 @@ export default function App() {
     }
   ]);
 
+  // Suivi de la progression du scroll (0 = haut de page, 1 = bas de page)
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalScroll > 0) {
+        const progress = Math.min(Math.max(window.scrollY / totalScroll, 0), 1);
+        setScrollProgress(progress);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  
   // Détection du paramètre URL et de la route /admin
   useEffect(() => {
     if (typeof window !== 'undefined') {
