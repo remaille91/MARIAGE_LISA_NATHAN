@@ -264,8 +264,8 @@ export default function App() {
     if (typeof window === 'undefined') return 'journee';
     try {
       const params = new URLSearchParams(window.location.search);
-      const inv = params.get('invitation') || params.get('type');
-      if (inv === 'repas' || inv === 'soir' || inv === 'soiree') return 'repas';
+      const inv = params.get('invitation') || params.get('type') || params.get('i') || params.get('mode');
+      if (inv === 'repas' || inv === 'soir' || inv === 'soiree' || inv === 'r' || inv === '2') return 'repas';
     } catch (e) {
       // Ignore
     }
@@ -1710,32 +1710,32 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Partage des 2 liens */}
+                {/* Partage des 2 liens ultra-discrets */}
                 <div className={`${adminMobileTab === 'links' ? 'grid' : 'hidden sm:grid'} grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4`}>
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
                     <div>
                       <div className="flex items-center gap-2 text-amber-300 text-xs font-semibold uppercase tracking-wider">
                         <Sun className="w-4 h-4 shrink-0" />
-                        <span>Lien 1 : Invités Journée &amp; Vin d’honneur</span>
+                        <span>Code Journée &amp; VH</span>
                       </div>
-                      <p className="text-[11px] text-stone-300 mt-1.5 font-mono break-all bg-white/5 px-3 py-2 rounded-xl">
-                        https://lisaetnathan.site/?invitation=journee
+                      <p className="text-[11px] text-stone-400 mt-1.5 font-mono bg-white/5 px-3 py-2 rounded-xl">
+                        /?i=j
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => copyToClipboard('https://lisaetnathan.site/?invitation=journee', 'link-journee')}
+                        onClick={() => copyToClipboard('https://lisaetnathan.site/?i=j', 'link-journee')}
                         className="flex-1 py-2.5 px-3 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-amber-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         {copiedText === 'link-journee' ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Lien copié !</span>
+                            <span>Copié !</span>
                           </>
                         ) : (
                           <>
                             <Copy className="w-3.5 h-3.5" />
-                            <span>Copier le lien</span>
+                            <span>Copier le lien complet</span>
                           </>
                         )}
                       </button>
@@ -1748,6 +1748,44 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+
+                  <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-orange-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
+                    <div>
+                      <div className="flex items-center gap-2 text-orange-300 text-xs font-semibold uppercase tracking-wider">
+                        <Sunset className="w-4 h-4 shrink-0" />
+                        <span>Code Repas du Soir</span>
+                      </div>
+                      <p className="text-[11px] text-stone-400 mt-1.5 font-mono bg-white/5 px-3 py-2 rounded-xl">
+                        /?i=r
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => copyToClipboard('https://lisaetnathan.site/?i=r', 'link-repas')}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-orange-400/20 hover:bg-orange-400/30 border border-orange-300/40 text-orange-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedText === 'link-repas' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier le lien complet</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => switchInvitationMode('repas')}
+                        className="py-2.5 px-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-orange-300" />
+                        <span>Aperçu</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-orange-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
                     <div>
