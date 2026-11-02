@@ -1709,7 +1709,7 @@ export default function App() {
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-rose-300 lg:mt-1">{stats.absents}</div>
                   </div>
                 </div>
-
+                
                 {/* Partage des 2 liens ultra-discrets */}
                 <div className={`${adminMobileTab === 'links' ? 'grid' : 'hidden sm:grid'} grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4`}>
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
