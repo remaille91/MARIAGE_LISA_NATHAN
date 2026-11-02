@@ -57,7 +57,7 @@ export default function App() {
     }
   ]);
 
-  // Suivi de la progression du scroll (0 = haut de page, 1 = bas de page)
+  // Suivi dynamique de la progression du scroll
   const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
   
-  // Détection du paramètre URL et de la route /admin
+  // Détection URL et route /admin
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
@@ -347,7 +347,7 @@ export default function App() {
 
   // VUE INVITATION PUBLIQUE
   return (
-    <div className="min-h-screen bg-[#1E0D06] text-[#FFF9F2] relative overflow-hidden font-sans selection:bg-[#E65C00] selection:text-white">
+    <div className="min-h-screen bg-[#140602] text-[#FFF9F2] relative overflow-hidden font-sans selection:bg-[#E65C00] selection:text-white">
       {/* Audio en streaming */}
       <audio ref={audioRef} src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=sunset-landscape-piano-112190.mp3" loop preload="auto" />
 
@@ -373,17 +373,62 @@ export default function App() {
         )}
       </button>
 
-      {/* DÉCOR DE FOND ANIMÉ */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#251007] via-[#5C230C] to-[#120703]" />
-        
-        {/* Soleil couchant */}
-        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 sm:w-96 sm:h-96 rounded-full bg-gradient-to-t from-[#E65C00] via-[#F5B041] to-[#FFF3D1] blur-xl opacity-80" />
-        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-64 sm:h-64 rounded-full bg-[#FFF5D6] shadow-[0_0_90px_rgba(245,176,65,0.9)] opacity-95" />
+      {/* DÉCOR DE FOND RÉACTIF AU DÉFILEMENT (LE SOLEIL SE COUCHE EN DIRECT) */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        {/* Le ciel qui s'assombrit au fur et à mesure qu'on lit l'invitation */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(to bottom, 
+              hsl(${24 - scrollProgress * 14}, ${65 - scrollProgress * 30}%, ${12 - scrollProgress * 8}%), 
+              hsl(${18 - scrollProgress * 8}, ${75 - scrollProgress * 25}%, ${24 - scrollProgress * 16}%), 
+              hsl(14, 60%, 5%))`
+          }}
+        />
 
-        {/* Mer & reflets */}
-        <div className="absolute bottom-0 inset-x-0 h-64 sm:h-80 bg-gradient-to-t from-[#0B0402] via-[#2A1107] to-[#5C230C]/60">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 sm:w-80 h-full bg-gradient-to-b from-[#F5B041]/40 via-[#E65C00]/20 to-transparent blur-md transform -skew-x-12" />
+        {/* Le Soleil qui descend vers la mer et rougit au scroll */}
+        <div 
+          className="absolute left-1/2 -translate-x-1/2 rounded-full"
+          style={{
+            top: `${30 + scrollProgress * 42}%`,
+            width: `${Math.max(320 - scrollProgress * 110, 160)}px`,
+            height: `${Math.max(320 - scrollProgress * 110, 160)}px`,
+            background: `radial-gradient(circle, 
+              rgba(255, 245, 214, 0.98) 0%, 
+              rgba(245, 176, 65, ${0.9 - scrollProgress * 0.3}) 45%, 
+              rgba(230, 92, 0, ${0.6 - scrollProgress * 0.3}) 75%, 
+              transparent 100%)`,
+            boxShadow: `0 0 ${110 - scrollProgress * 50}px rgba(245, 176, 65, ${0.85 - scrollProgress * 0.4})`,
+            opacity: Math.max(1 - scrollProgress * 0.55, 0.35)
+          }}
+        />
+
+        {/* Halo crépusculaire large */}
+        <div 
+          className="absolute left-1/2 -translate-x-1/2 rounded-full blur-3xl"
+          style={{
+            top: `${32 + scrollProgress * 40}%`,
+            width: '520px',
+            height: '520px',
+            background: 'radial-gradient(circle, rgba(230,92,0,0.35) 0%, transparent 70%)',
+            opacity: Math.max(1 - scrollProgress * 0.5, 0.2)
+          }}
+        />
+
+        {/* Mer & ligne d'horizon */}
+        <div className="absolute bottom-0 inset-x-0 h-64 sm:h-80 bg-gradient-to-t from-[#080302] via-[#1c0a04] to-[#3a1507]/90 border-t border-[#f5b041]/25">
+          {/* Reflets dorés sur l'eau qui s'élargissent quand le soleil descend */}
+          <div 
+            className="absolute top-0 left-1/2 -translate-x-1/2 h-full blur-md"
+            style={{
+              width: `${140 + scrollProgress * 180}px`,
+              background: `linear-gradient(to bottom, 
+                rgba(245, 176, 65, ${0.5 - scrollProgress * 0.15}), 
+                rgba(230, 92, 0, ${0.28 - scrollProgress * 0.1}), 
+                transparent)`,
+              transform: 'translateX(-50%) perspective(300px) rotateX(25deg)'
+            }}
+          />
           <svg className="absolute top-0 inset-x-0 w-full h-8 text-[#5C230C]/40 fill-current animate-pulse" viewBox="0 0 1200 120" preserveAspectRatio="none">
             <path d="M0,0 C150,40 350,-40 500,20 C650,60 900,-20 1200,10 L1200,120 L0,120 Z"></path>
           </svg>
