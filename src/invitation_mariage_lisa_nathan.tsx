@@ -35,105 +35,7 @@ import {
   Gift
 } from 'lucide-react';
 
-// Firebase Imports
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  signInAnonymously,
-  signInWithCustomToken,
-  onAuthStateChanged
-} from 'firebase/auth';
-import {
-  getFirestore,
-  collection,
-  doc,
-  setDoc,
-  addDoc,
-  deleteDoc,
-  onSnapshot
-} from 'firebase/firestore';
-
-// ==========================================
-// 1. INITIALISATION FIREBASE (RÈGLES STRICTES)
-// ==========================================
-let app = null;
-let auth = null;
-let db = null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'lisa-nathan-wedding-2027';
-
-try {
-  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-    const firebaseConfig = JSON.parse(__firebase_config);
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-  }
-} catch (error) {
-  console.error('Erreur initialisation Firebase:', error);
-}
-
-// ==========================================
-// 2. DONNÉES DE DÉMONSTRATION INITIALES
-// ==========================================
-const INITIAL_SAMPLE_RSVPS = [
-  {
-    id: 'sample-1',
-    prenom: 'Camille',
-    nom: 'Laurent',
-    email: 'camille.laurent@exemple.be',
-    presence: true,
-    accompagnants: 1,
-    accompagnantsList: [{ prenom: 'Julien', nom: 'Moreau' }],
-    nbPersonnes: 2,
-    parcours: 'journee',
-    motDoux: 'Tellement émue de vous voir franchir cette belle étape ! Hâte de célébrer votre amour sous le soleil de mai.',
-    createdAt: '2026-10-28T14:22:00.000Z'
-  },
-  {
-    id: 'sample-2',
-    prenom: 'Youssef',
-    nom: 'Benali',
-    email: 'y.benali@exemple.be',
-    presence: true,
-    accompagnants: 2,
-    accompagnantsList: [
-      { prenom: 'Nadia', nom: 'Benali' },
-      { prenom: 'Adam', nom: 'Benali' }
-    ],
-    nbPersonnes: 3,
-    parcours: 'journee',
-    motDoux: 'Qu’Allah bénisse votre union et remplisse votre foyer de sérénité et de joie. On sera là dès 14h30 !',
-    createdAt: '2026-10-29T18:05:00.000Z'
-  },
-  {
-    id: 'sample-3',
-    prenom: 'Thomas',
-    nom: 'Peeters',
-    email: 'thomas.peeters@exemple.be',
-    presence: true,
-    accompagnants: 0,
-    accompagnantsList: [],
-    nbPersonnes: 1,
-    parcours: 'repas',
-    motDoux: 'Merci pour l’invitation au dîner ! Ma veste terracotta est déjà prête pour le dress code coucher de soleil.',
-    createdAt: '2026-10-30T09:40:00.000Z'
-  },
-  {
-    id: 'sample-4',
-    prenom: 'Élodie',
-    nom: 'Vandenberghe',
-    email: 'elodie.vdb@exemple.be',
-    presence: false,
-    accompagnants: 0,
-    accompagnantsList: [],
-    nbPersonnes: 0,
-    parcours: 'repas',
-    motDoux: 'Je serai malheureusement à l’étranger ce week-end-là, mais je penserai très fort à vous deux. Tous mes vœux de bonheur !',
-    createdAt: '2026-10-31T11:15:00.000Z'
-  }
-];
-
-// Palette Dress Code "Coucher de Soleil" (Dégradé exclusif du Jaune Solaire à l'Orange Couchant)
+// Palette Dress Code "Coucher de Soleil"
 const DRESSCODE_SWATCHES = [
   {
     id: 'jaune-solaire',
@@ -192,7 +94,7 @@ const DRESSCODE_SWATCHES = [
   }
 ];
 
-// Planning selon le parcours (Uniquement Heure, Titre et Sous-titre doré)
+// Planning selon le parcours
 const SCHEDULE_DATA = {
   journee: [
     {
@@ -250,7 +152,7 @@ const SCHEDULE_DATA = {
 };
 
 // ==========================================
-// 3. GÉNÉRATEUR AUDIO AMBIANT (WEB AUDIO API)
+// GÉNÉRATEUR AUDIO AMBIANT (WEB AUDIO API)
 // ==========================================
 class SunsetAudioEngine {
   constructor() {
@@ -258,7 +160,6 @@ class SunsetAudioEngine {
     this.isPlaying = false;
     this.masterGain = null;
     this.intervalId = null;
-    this.oscillators = [];
   }
 
   init() {
@@ -280,7 +181,6 @@ class SunsetAudioEngine {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, now);
 
-    // Enveloppe douce type piano feutré / harpe céleste
     noteGain.gain.setValueAtTime(0.0001, now);
     noteGain.gain.linearRampToValueAtTime(volume, now + 0.8);
     noteGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
@@ -303,12 +203,11 @@ class SunsetAudioEngine {
       this.masterGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
       this.masterGain.gain.linearRampToValueAtTime(0.35, this.ctx.currentTime + 2.0);
 
-      // Accords chaleureux "Coucher de soleil" (Fmaj7 -> G6 -> Em7 -> Am9)
       const chords = [
-        [174.61, 220.0, 261.63, 329.63, 392.0], // Fmaj9
-        [196.0, 246.94, 293.66, 329.63, 392.0], // G6
-        [164.81, 246.94, 293.66, 392.0, 493.88], // Em7
-        [220.0, 261.63, 329.63, 392.0, 493.88]  // Am9
+        [174.61, 220.0, 261.63, 329.63, 392.0],
+        [196.0, 246.94, 293.66, 329.63, 392.0],
+        [164.81, 246.94, 293.66, 392.0, 493.88],
+        [220.0, 261.63, 329.63, 392.0, 493.88]
       ];
 
       let chordIndex = 0;
@@ -318,12 +217,10 @@ class SunsetAudioEngine {
         const chord = chords[chordIndex % chords.length];
         chordIndex++;
 
-        // Nappe de fond chaude
         this.playNote(chord[0] / 2, 6.5, 0, 0.05, 'sine');
         this.playNote(chord[0], 6.0, 0.1, 0.04, 'triangle');
         this.playNote(chord[2], 5.8, 0.2, 0.03, 'sine');
 
-        // Arpège délicat
         chord.forEach((note, idx) => {
           this.playNote(note * 2, 3.8, idx * 0.9 + 0.3, 0.022, 'sine');
         });
@@ -353,10 +250,9 @@ class SunsetAudioEngine {
 const audioEngine = new SunsetAudioEngine();
 
 // ==========================================
-// 4. COMPOSANT PRINCIPAL DE L'APPLICATION
+// COMPOSANT PRINCIPAL DE L'APPLICATION
 // ==========================================
 export default function App() {
-  // Détermination initiale du parcours via l'URL (?invitation=journee ou ?invitation=repas)
   const getInitialModeFromUrl = () => {
     if (typeof window === 'undefined') return 'journee';
     try {
@@ -364,21 +260,19 @@ export default function App() {
       const inv = params.get('invitation') || params.get('type');
       if (inv === 'repas' || inv === 'soir' || inv === 'soiree') return 'repas';
     } catch (e) {
-      // Ignore URL search params error in restricted environments
+      // Ignore
     }
     return 'journee';
   };
 
   const [invitationMode, setInvitationMode] = useState(getInitialModeFromUrl);
-  const [currentView, setCurrentView] = useState('invitation'); // 'invitation' | 'admin'
+  const [currentView, setCurrentView] = useState('invitation');
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  // État des couleurs du dress code
-  const [selectedSwatch, setSelectedSwatch] = useState(DRESSCODE_SWATCHES[2]); // Ambre Doré par défaut
+  const [selectedSwatch, setSelectedSwatch] = useState(DRESSCODE_SWATCHES[2]);
   const [copiedText, setCopiedText] = useState('');
 
-  // État du compte à rebours jusqu'au 1er Mai 2027 à 14h30
   const [countdown, setCountdown] = useState({ days: 181, hours: 0, minutes: 0, seconds: 0 });
 
   // État Formulaire RSVP
@@ -386,19 +280,17 @@ export default function App() {
     prenom: '',
     nom: '',
     email: '',
-    presence: null, // true | false
-    accompagnants: 0, // 0 = vient seul(e) (1 pers. au total)
-    accompagnantsList: [], // [{ prenom: '', nom: '' }]
+    presence: null,
+    accompagnants: 0,
+    accompagnantsList: [],
     motDoux: ''
   });
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedRsvp, setSubmittedRsvp] = useState(null);
-  const [emailPreviewTab, setEmailPreviewTab] = useState('guest'); // 'guest' | 'couple'
 
-  // État Firebase & Données Backoffice
-  const [user, setUser] = useState(null);
-  const [rsvps, setRsvps] = useState(INITIAL_SAMPLE_RSVPS);
+  // État Données Backoffice (Persistantes via l'API)
+  const [rsvps, setRsvps] = useState([]);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
 
   // État Admin Backoffice
@@ -406,9 +298,9 @@ export default function App() {
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [adminAuthError, setAdminAuthError] = useState('');
-  const [adminMobileTab, setAdminMobileTab] = useState('guests'); // 'guests' | 'links' | 'messages'
+  const [adminMobileTab, setAdminMobileTab] = useState('guests');
   const [adminSearch, setAdminSearch] = useState('');
-  const [adminFilter, setAdminFilter] = useState('all'); // 'all' | 'present' | 'absent' | 'journee' | 'repas' | 'mot_doux'
+  const [adminFilter, setAdminFilter] = useState('all');
   const [selectedGuestModal, setSelectedGuestModal] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -423,7 +315,26 @@ export default function App() {
     motDoux: ''
   });
 
-  // Ajuster dynamiquement la liste des champs Prénom/Nom des accompagnants
+  // Chargement des réponses depuis la base de données du serveur
+  const fetchRsvpsFromServer = async () => {
+    try {
+      const res = await fetch('/api/send-rsvp');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.rsvps)) {
+          setRsvps(data.rsvps);
+          setIsCloudSynced(true);
+        }
+      }
+    } catch (err) {
+      console.error('Erreur chargement RSVPs:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchRsvpsFromServer();
+  }, [currentView, isAdminAuthenticated]);
+
   const handleAccompagnantsCountChange = (count) => {
     const safeCount = Math.max(0, Math.min(10, Number(count) || 0));
     setRsvpForm((prev) => {
@@ -476,7 +387,6 @@ export default function App() {
     });
   };
 
-  // Fonction utilitaire pour calculer le nombre réel de personnes par réponse
   const getGuestTotalPersons = (guest) => {
     if (!guest || !guest.presence) return 0;
     if (typeof guest.nbPersonnes === 'number' && guest.nbPersonnes >= 1) {
@@ -487,68 +397,7 @@ export default function App() {
   };
 
   // ==========================================
-  // EFFET 1 : AUTHENTIFICATION FIREBASE
-  // ==========================================
-  useEffect(() => {
-    if (!auth) return;
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error('Erreur auth Firebase:', err);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // ==========================================
-  // EFFET 2 : SYNCHRONISATION FIRESTORE
-  // ==========================================
-  useEffect(() => {
-    if (!user || !db) return;
-
-    const rsvpCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'rsvp_reponses');
-
-    const unsubscribe = onSnapshot(
-      rsvpCollectionRef,
-      async (snapshot) => {
-        setIsCloudSynced(true);
-        if (snapshot.empty) {
-          try {
-            for (const sample of INITIAL_SAMPLE_RSVPS) {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'rsvp_reponses', sample.id);
-              await setDoc(docRef, sample);
-            }
-          } catch (seedErr) {
-            console.error('Seed error:', seedErr);
-          }
-        } else {
-          const loaded = snapshot.docs.map((d) => ({
-            id: d.id,
-            ...d.data()
-          }));
-          loaded.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-          setRsvps(loaded);
-        }
-      },
-      (error) => {
-        console.error('Erreur lecture Firestore:', error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user]);
-
-  // ==========================================
-  // EFFET 3 : LANCEMENT AUTOMATIQUE DE LA MUSIQUE & SCROLLYTELLING
+  // AUDIO & SYNCHRONISATION FLUIDE DU SOLEIL AU SCROLL
   // ==========================================
   useEffect(() => {
     let userManuallyMuted = false;
@@ -563,7 +412,7 @@ export default function App() {
         }
         setIsAudioPlaying(true);
       } catch {
-        // Attend le premier geste utilisateur si le navigateur bloque l'autoplay
+        // Autoplay bloqué jusqu'au premier clic
       }
     };
 
@@ -598,21 +447,39 @@ export default function App() {
     };
   }, []);
 
+  // Calcul ultra-fluide du scroll sans décalage (via requestAnimationFrame)
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
+    let rafId = null;
+
+    const updateScroll = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
       const progress = docHeight > 0 ? Math.min(1, Math.max(0, scrollTop / docHeight)) : 0;
       setScrollProgress(progress);
+      rafId = null;
+    };
+
+    const handleScroll = () => {
+      if (rafId === null) {
+        rafId = window.requestAnimationFrame(updateScroll);
+      }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleScroll, { passive: true });
+    updateScroll();
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
   }, [currentView, invitationMode]);
 
   // ==========================================
-  // EFFET 4 : COMPTE À REBOURS (1er MAI 2027)
+  // COMPTE À REBOURS (1er MAI 2027)
   // ==========================================
   useEffect(() => {
     const targetDate = new Date('2027-05-01T14:30:00+02:00').getTime();
@@ -632,9 +499,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // ==========================================
-  // GESTION AUDIO & NAVIGATION
-  // ==========================================
   const toggleAudio = () => {
     if (isAudioPlaying || audioEngine.isPlaying) {
       audioEngine.stop();
@@ -653,7 +517,7 @@ export default function App() {
       url.searchParams.set('invitation', mode);
       window.history.replaceState({}, '', url);
     } catch (e) {
-      // Ignore history error in sandboxed iframe
+      // Ignore
     }
   };
 
@@ -666,7 +530,7 @@ export default function App() {
   };
 
   // ==========================================
-  // SOUMISSION DU FORMULAIRE RSVP (CORrigée avec API Resend)
+  // SOUMISSION DU FORMULAIRE RSVP
   // ==========================================
   const handleRsvpSubmit = async (e) => {
     e.preventDefault();
@@ -677,7 +541,7 @@ export default function App() {
       return;
     }
     if (!rsvpForm.email.trim() || !rsvpForm.email.includes('@')) {
-      setFormError('Veuillez renseigner une adresse email valide pour recevoir votre confirmation.');
+      setFormError('Veuillez renseigner une adresse email valide.');
       return;
     }
     if (rsvpForm.presence === null) {
@@ -706,6 +570,7 @@ export default function App() {
     const totalPersonnes = rsvpForm.presence ? 1 + accompagnantsCount : 0;
 
     const newEntry = {
+      id: 'rsvp-' + Date.now(),
       prenom: rsvpForm.prenom.trim(),
       nom: rsvpForm.nom.trim(),
       email: rsvpForm.email.trim(),
@@ -719,31 +584,21 @@ export default function App() {
     };
 
     try {
-      // 1. Enregistrement dans Firebase / Firestore
-      if (user && db) {
-        const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'rsvp_reponses');
-        const docRef = await addDoc(colRef, newEntry);
-        newEntry.id = docRef.id;
-      } else {
-        newEntry.id = 'local-' + Date.now();
-        setRsvps((prev) => [newEntry, ...prev]);
+      const response = await fetch('/api/send-rsvp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEntry)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la sauvegarde');
       }
 
-      // 2. Appel de l'API Resend pour déclencher l'envoi des e-mails
-      try {
-        await fetch('/api/send-rsvp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newEntry)
-        });
-      } catch (emailErr) {
-        console.error('Erreur lors de l’envoi de l’email via l’API:', emailErr);
-      }
-
+      setRsvps((prev) => [newEntry, ...prev]);
       setSubmittedRsvp(newEntry);
     } catch (error) {
       console.error('Erreur enregistrement RSVP:', error);
-      setFormError('Une erreur est survenue lors de l’enregistrement. Veuillez réessayer.');
+      setFormError('Une erreur est survenue lors de l’envoi. Veuillez réessayer.');
     } finally {
       setIsSubmitting(false);
     }
@@ -758,6 +613,7 @@ export default function App() {
       setIsAdminAuthenticated(true);
       setAdminAuthError('');
       setAdminPasswordInput('');
+      fetchRsvpsFromServer();
     } else {
       setAdminAuthError('Mot de passe incorrect. Veuillez réessayer.');
     }
@@ -779,6 +635,7 @@ export default function App() {
     const totalPersonnes = manualGuest.presence ? 1 + accompagnantsCount : 0;
 
     const entry = {
+      id: 'manual-' + Date.now(),
       prenom: manualGuest.prenom.trim(),
       nom: manualGuest.nom.trim(),
       email: manualGuest.email.trim() || 'non-renseigne@mariage.be',
@@ -788,17 +645,17 @@ export default function App() {
       nbPersonnes: totalPersonnes,
       parcours: manualGuest.parcours,
       motDoux: manualGuest.motDoux.trim(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      skipEmail: true
     };
 
     try {
-      if (user && db) {
-        const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'rsvp_reponses');
-        await addDoc(colRef, entry);
-      } else {
-        entry.id = 'manual-' + Date.now();
-        setRsvps((prev) => [entry, ...prev]);
-      }
+      await fetch('/api/send-rsvp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      });
+      setRsvps((prev) => [entry, ...prev]);
       setShowAddModal(false);
       setManualGuest({
         prenom: '',
@@ -817,11 +674,12 @@ export default function App() {
 
   const handleDeleteRsvp = async (id) => {
     try {
-      if (user && db) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rsvp_reponses', id));
-      } else {
-        setRsvps((prev) => prev.filter((item) => item.id !== id));
-      }
+      await fetch('/api/send-rsvp', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      setRsvps((prev) => prev.filter((item) => item.id !== id));
       setDeleteConfirmId(null);
     } catch (err) {
       console.error('Erreur suppression:', err);
@@ -876,16 +734,12 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Statistiques Backoffice (Calcul du total réel d'invités + accompagnants)
   const stats = useMemo(() => {
     const total = rsvps.length;
     const presentResponses = rsvps.filter((r) => r.presence).length;
     const absents = total - presentResponses;
 
-    const totalPersonsPresents = rsvps.reduce(
-      (sum, r) => sum + getGuestTotalPersons(r),
-      0
-    );
+    const totalPersonsPresents = rsvps.reduce((sum, r) => sum + getGuestTotalPersons(r), 0);
     const journeePresents = rsvps
       .filter((r) => r.presence && r.parcours === 'journee')
       .reduce((sum, r) => sum + getGuestTotalPersons(r), 0);
@@ -908,13 +762,11 @@ export default function App() {
     };
   }, [rsvps]);
 
-  // Filtrage de la liste des invités
   const filteredRsvps = useMemo(() => {
     return rsvps.filter((r) => {
-      const matchesSearch =
-        `${r.prenom} ${r.nom} ${r.email} ${r.motDoux || ''}`
-          .toLowerCase()
-          .includes(adminSearch.toLowerCase());
+      const matchesSearch = `${r.prenom} ${r.nom} ${r.email} ${r.motDoux || ''}`
+        .toLowerCase()
+        .includes(adminSearch.toLowerCase());
 
       if (!matchesSearch) return false;
       if (adminFilter === 'present') return r.presence === true;
@@ -926,10 +778,8 @@ export default function App() {
     });
   }, [rsvps, adminSearch, adminFilter]);
 
-  // ==========================================
-  // CALCUL DYNAMIQUE DU SOLEIL SUR LA MER AU SCROLL
-  // ==========================================
-  const sunTopPercent = 14 + scrollProgress * 48;
+  // Position verticale exacte et directe du soleil (de 14% en haut à 64% sur l'horizon marin en bas)
+  const sunTopPercent = 14 + scrollProgress * 50;
 
   return (
     <div className="min-h-screen relative selection:bg-amber-400/30 selection:text-amber-50 font-sans-clean text-stone-50 overflow-x-hidden">
@@ -1019,25 +869,27 @@ export default function App() {
         }
       `}</style>
 
-      {/* ARRIÈRE-PLAN FIXE ANIMÉ */}
+      {/* ARRIÈRE-PLAN FIXE ANIMÉ (SOLEIL SYNCHRONISÉ DIRECTEMENT AU SCROLL) */}
       <div
-        className="fixed inset-0 pointer-events-none z-0 overflow-hidden transition-colors duration-700"
+        className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
         style={{
           background:
             'linear-gradient(180deg, #9A2B17 0%, #C84B20 24%, #E67E22 50%, #F5B041 68%, #D35400 82%, #6E2314 100%)'
         }}
       >
+        {/* Halo atmosphérique synchronisé sans lag */}
         <div
-          className="absolute left-1/2 -translate-x-1/2 w-[24rem] h-[24rem] sm:w-[38rem] sm:h-[38rem] rounded-full blur-3xl opacity-65 transition-all duration-300"
+          className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] h-[24rem] sm:w-[38rem] sm:h-[38rem] rounded-full blur-3xl opacity-65 will-change-transform"
           style={{
-            top: `calc(${sunTopPercent}% - 9rem)`,
+            top: `${sunTopPercent}%`,
             background:
               'radial-gradient(circle, rgba(254,245,200,0.92) 0%, rgba(245,176,65,0.58) 42%, rgba(211,84,0,0) 75%)'
           }}
         />
 
+        {/* Soleil vectoriel synchronisé en temps réel avec le scroll */}
         <div
-          className="absolute left-1/2 -translate-x-1/2 transition-all duration-300"
+          className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 will-change-transform"
           style={{ top: `${sunTopPercent}%` }}
         >
           <div className="relative flex items-center justify-center">
@@ -1620,35 +1472,18 @@ export default function App() {
                         className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-300 via-amber-400 to-orange-500 text-amber-950 font-bold text-sm sm:text-base shadow-[0_10px_30px_rgba(245,176,65,0.45)] hover:brightness-110 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
                       >
                         <Send className="w-4 h-4" />
-                        <span>{isSubmitting ? 'Enregistrement en cours...' : 'Envoyer ma réponse'}</span>
+                        <span>{isSubmitting ? 'Envoi en cours...' : 'Envoyer ma réponse'}</span>
                       </button>
                     </form>
                   ) : (
-                    <div className="space-y-6 animate-fadeIn hero-text-shadow">
-                      <div className="text-center p-6 rounded-3xl glass-lighter border border-emerald-300/40">
-                        <div className="w-14 h-14 rounded-full bg-emerald-400 text-stone-950 flex items-center justify-center mx-auto mb-4 shadow-lg">
-                          <Check className="w-8 h-8 stroke-[2.5]" />
-                        </div>
-                        <h3 className="font-serif-luxury text-3xl text-white font-semibold">
-                          Merci infiniment, {submittedRsvp.prenom} !
-                        </h3>
-                        <p className="text-sm text-amber-50 mt-2">
-                          Votre réponse a bien été transmise à Lisa &amp; Nathan et un email récapitulatif a été envoyé à{' '}
-                          <strong className="text-amber-200">{submittedRsvp.email}</strong>.
-                        </p>
+                    /* CONFIRMATION MINIMALISTE DEMANDÉE */
+                    <div className="text-center py-8 px-6 rounded-3xl glass-lighter border border-emerald-300/40 hero-text-shadow">
+                      <div className="w-14 h-14 rounded-full bg-emerald-400 text-stone-950 flex items-center justify-center mx-auto mb-4 shadow-lg">
+                        <Check className="w-8 h-8 stroke-[2.5]" />
                       </div>
-                      <div className="text-center pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSubmittedRsvp(null);
-                            setRsvpForm({ prenom: '', nom: '', email: '', presence: null, accompagnants: 0, accompagnantsList: [], motDoux: '' });
-                          }}
-                          className="text-xs text-amber-100 hover:text-white underline cursor-pointer"
-                        >
-                          Modifier ou envoyer une autre réponse
-                        </button>
-                      </div>
+                      <h3 className="font-serif-luxury text-3xl sm:text-4xl text-white font-semibold">
+                        On a bien reçu votre réponse !
+                      </h3>
                     </div>
                   )}
                 </div>
@@ -1668,7 +1503,7 @@ export default function App() {
             </footer>
           </main>
         ) : (
-          // BACKOFFICE (ADMIN)
+          /* BACKOFFICE MARIÉS (/admin) */
           <section className="relative z-10 min-h-screen pt-4 pb-28 sm:py-10 px-3.5 sm:px-8 max-w-6xl mx-auto">
             <div className="flex items-center justify-between gap-2 mb-5 sm:mb-8">
               <button
@@ -1678,14 +1513,18 @@ export default function App() {
                 <Sun className="w-3.5 h-3.5 text-amber-300" />
                 <span>← Invitation</span>
               </button>
+
               {isAdminAuthenticated && (
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-[11px]">
                     <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                    <span>Session active</span>
+                    <span>{isCloudSynced ? 'Base de données connectée' : 'Session active'}</span>
                   </span>
                   <button
-                    onClick={() => { setIsAdminAuthenticated(false); setAdminPasswordInput(''); }}
+                    onClick={() => {
+                      setIsAdminAuthenticated(false);
+                      setAdminPasswordInput('');
+                    }}
                     className="px-3 py-1.5 rounded-full bg-stone-950/70 hover:bg-stone-900 border border-white/15 text-[11px] text-stone-200 cursor-pointer"
                   >
                     Déconnexion
@@ -1699,17 +1538,25 @@ export default function App() {
                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-stone-950 flex items-center justify-center mx-auto mb-5 shadow-lg">
                   <Lock className="w-7 h-7 sm:w-8 sm:h-8" />
                 </div>
-                <h1 className="font-serif-luxury text-3xl text-center text-amber-50 font-semibold">Backoffice — Lisa &amp; Nathan</h1>
-                <form onSubmit={handleAdminLogin} autoComplete="off" className="space-y-4 mt-6">
+                <h1 className="font-serif-luxury text-3xl text-center text-amber-50 font-semibold">
+                  Backoffice — Lisa &amp; Nathan
+                </h1>
+                <p className="text-xs text-center text-stone-300 mt-1.5 mb-6 leading-relaxed">
+                  Veuillez saisir votre mot de passe personnel pour accéder aux réponses des invités.
+                </p>
+
+                <form onSubmit={handleAdminLogin} autoComplete="off" className="space-y-4">
                   {adminAuthError && (
-                    <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-400/40 text-rose-200 text-xs text-center">{adminAuthError}</div>
+                    <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-400/40 text-rose-200 text-xs text-center">
+                      {adminAuthError}
+                    </div>
                   )}
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={adminPasswordInput}
                       onChange={(e) => setAdminPasswordInput(e.target.value)}
-                      placeholder="Mot de passe..."
+                      placeholder="Saisissez le mot de passe..."
                       className="w-full px-4 py-3.5 pr-11 rounded-2xl bg-white/10 border border-amber-200/30 focus:border-amber-400 focus:outline-none text-white text-sm"
                     />
                     <button
@@ -1720,7 +1567,10 @@ export default function App() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <button type="submit" className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold text-sm shadow-lg hover:brightness-110 transition-all cursor-pointer">
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold text-sm shadow-lg hover:brightness-110 transition-all cursor-pointer"
+                  >
                     Se connecter
                   </button>
                 </form>
@@ -1729,45 +1579,200 @@ export default function App() {
               <div className="space-y-5 sm:space-y-7">
                 <div className="rounded-3xl bg-stone-950/80 backdrop-blur-2xl border border-amber-200/30 p-5 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-amber-300 block">Backoffice Mariés • 1er Mai 2027</span>
-                    <h1 className="font-serif-luxury text-3xl sm:text-5xl text-amber-50 mt-0.5">Réponses &amp; Invités</h1>
+                    <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-amber-300 block">
+                      Backoffice Mariés • 1er Mai 2027
+                    </span>
+                    <h1 className="font-serif-luxury text-3xl sm:text-5xl text-amber-50 mt-0.5">
+                      Réponses &amp; Invités
+                    </h1>
                   </div>
+
                   <div className="hidden sm:flex flex-wrap items-center gap-3">
-                    <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-amber-200/30 text-amber-100 text-xs sm:text-sm font-medium transition-all cursor-pointer">
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-amber-200/30 text-amber-100 text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                    >
                       <Plus className="w-4 h-4 text-amber-300" />
                       <span>Ajouter un invité</span>
                     </button>
-                    <button onClick={handleExportCSV} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold text-xs sm:text-sm shadow-lg hover:brightness-110 transition-all cursor-pointer">
+                    <button
+                      onClick={handleExportCSV}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold text-xs sm:text-sm shadow-lg hover:brightness-110 transition-all cursor-pointer"
+                    >
                       <Download className="w-4 h-4" />
                       <span>Exporter CSV / Excel</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                {/* Onglets Mobile */}
+                <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl bg-stone-950/85 border border-amber-200/25 sm:hidden">
+                  <button
+                    onClick={() => setAdminMobileTab('guests')}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      adminMobileTab === 'guests'
+                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 shadow'
+                        : 'text-stone-300'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Invités ({stats.total})</span>
+                  </button>
+                  <button
+                    onClick={() => setAdminMobileTab('messages')}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      adminMobileTab === 'messages'
+                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 shadow'
+                        : 'text-stone-300'
+                    }`}
+                  >
+                    <MessageSquareHeart className="w-3.5 h-3.5" />
+                    <span>Mots ({stats.motsDouxCount})</span>
+                  </button>
+                  <button
+                    onClick={() => setAdminMobileTab('links')}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      adminMobileTab === 'links'
+                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 shadow'
+                        : 'text-stone-300'
+                    }`}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>2 Liens</span>
+                  </button>
+                </div>
+
+                {/* KPIs */}
+                <div className={`${adminMobileTab === 'links' ? 'hidden sm:grid' : 'grid'} grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4`}>
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-200/25 p-4 sm:p-5">
-                    <span className="text-stone-300 text-[11px] sm:text-xs">Total Réponses</span>
+                    <div className="flex items-center justify-between text-stone-300 text-[11px] sm:text-xs mb-1">
+                      <span>Total Réponses</span>
+                      <Users className="w-4 h-4 text-amber-300" />
+                    </div>
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-white">{stats.total}</div>
+                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">{stats.motsDouxCount} mots doux reçus</p>
                   </div>
+
                   <div className="rounded-3xl bg-emerald-950/65 backdrop-blur-xl border border-emerald-400/35 p-4 sm:p-5">
-                    <span className="text-emerald-200 text-[11px] sm:text-xs">Total Personnes</span>
+                    <div className="flex items-center justify-between text-emerald-200 text-[11px] sm:text-xs mb-1">
+                      <span>Total Personnes</span>
+                      <UserCheck className="w-4 h-4 text-emerald-400" />
+                    </div>
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-emerald-300">{stats.presents}</div>
+                    <p className="text-[10px] sm:text-[11px] text-emerald-200/80 mt-1">
+                      {stats.presentResponses} rép. positive{stats.presentResponses > 1 ? 's' : ''}
+                    </p>
                   </div>
+
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-200/25 p-4 sm:p-5">
-                    <span className="text-amber-200 text-[11px] sm:text-xs">Journée &amp; VH</span>
+                    <div className="flex items-center justify-between text-amber-200 text-[11px] sm:text-xs mb-1">
+                      <span>Journée &amp; VH</span>
+                      <Sun className="w-4 h-4 text-amber-400" />
+                    </div>
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-amber-200">{stats.journeePresents}</div>
+                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">Pers. dès 14h30</p>
                   </div>
+
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-200/25 p-4 sm:p-5">
-                    <span className="text-orange-200 text-[11px] sm:text-xs">Repas du Soir</span>
+                    <div className="flex items-center justify-between text-orange-200 text-[11px] sm:text-xs mb-1">
+                      <span>Repas du Soir</span>
+                      <Sunset className="w-4 h-4 text-orange-400" />
+                    </div>
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-orange-200">{stats.repasPresents}</div>
+                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">Pers. dès 19h00</p>
                   </div>
-                  <div className="col-span-2 lg:col-span-1 rounded-3xl bg-rose-950/55 backdrop-blur-xl border border-rose-400/25 p-4 sm:p-5">
-                    <span className="text-rose-200 text-[11px] sm:text-xs">Absents</span>
-                    <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-rose-300">{stats.absents}</div>
+
+                  <div className="col-span-2 lg:col-span-1 rounded-3xl bg-rose-950/55 backdrop-blur-xl border border-rose-400/25 p-4 sm:p-5 flex lg:block items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-rose-200 text-[11px] sm:text-xs mb-0.5">
+                        <UserX className="w-4 h-4 text-rose-400" />
+                        <span>Absents</span>
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] text-rose-200/70">Ont décliné</p>
+                    </div>
+                    <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-rose-300 lg:mt-1">{stats.absents}</div>
                   </div>
                 </div>
 
-                <div className="rounded-3xl bg-stone-950/80 backdrop-blur-2xl border border-amber-200/30 p-4 sm:p-6 space-y-4 sm:space-y-5">
+                {/* Partage des 2 liens */}
+                <div className={`${adminMobileTab === 'links' ? 'grid' : 'hidden sm:grid'} grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4`}>
+                  <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
+                    <div>
+                      <div className="flex items-center gap-2 text-amber-300 text-xs font-semibold uppercase tracking-wider">
+                        <Sun className="w-4 h-4 shrink-0" />
+                        <span>Lien 1 : Invités Journée &amp; Vin d’honneur</span>
+                      </div>
+                      <p className="text-[11px] text-stone-300 mt-1.5 font-mono break-all bg-white/5 px-3 py-2 rounded-xl">
+                        https://lisaetnathan.site/?invitation=journee
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => copyToClipboard('https://lisaetnathan.site/?invitation=journee', 'link-journee')}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-amber-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedText === 'link-journee' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Lien copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier le lien</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => switchInvitationMode('journee')}
+                        className="py-2.5 px-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Aperçu</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-orange-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
+                    <div>
+                      <div className="flex items-center gap-2 text-orange-300 text-xs font-semibold uppercase tracking-wider">
+                        <Sunset className="w-4 h-4 shrink-0" />
+                        <span>Lien 2 : Invités Repas du Soir (19h00)</span>
+                      </div>
+                      <p className="text-[11px] text-stone-300 mt-1.5 font-mono break-all bg-white/5 px-3 py-2 rounded-xl">
+                        https://lisaetnathan.site/?invitation=repas
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => copyToClipboard('https://lisaetnathan.site/?invitation=repas', 'link-repas')}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-orange-400/20 hover:bg-orange-400/30 border border-orange-300/40 text-orange-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedText === 'link-repas' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Lien copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier le lien</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => switchInvitationMode('repas')}
+                        className="py-2.5 px-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-orange-300" />
+                        <span>Aperçu</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Liste des invités */}
+                <div className={`${adminMobileTab === 'guests' ? 'block' : 'hidden sm:block'} rounded-3xl bg-stone-950/80 backdrop-blur-2xl border border-amber-200/30 p-4 sm:p-6 space-y-4 sm:space-y-5`}>
                   <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                     <div className="relative flex-1">
                       <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1775,12 +1780,36 @@ export default function App() {
                         type="text"
                         value={adminSearch}
                         onChange={(e) => setAdminSearch(e.target.value)}
-                        placeholder="Rechercher un invité..."
+                        placeholder="Rechercher un invité (prénom, nom, email)..."
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 focus:border-amber-400 focus:outline-none text-xs sm:text-sm text-white placeholder-stone-400"
                       />
                     </div>
+
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                      {[
+                        { id: 'all', label: 'Tous' },
+                        { id: 'present', label: 'Présents' },
+                        { id: 'absent', label: 'Absents' },
+                        { id: 'journee', label: 'Journée & VH' },
+                        { id: 'repas', label: 'Repas Soir' },
+                        { id: 'mot_doux', label: 'Mots Doux' }
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setAdminFilter(f.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
+                            adminFilter === f.id
+                              ? 'bg-amber-400 text-stone-950 font-bold shadow'
+                              : 'bg-white/10 text-stone-300 hover:bg-white/15'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
+                  {/* Tableau Desktop & Cartes Mobile */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -1788,30 +1817,153 @@ export default function App() {
                           <th className="py-3.5 px-3">Date</th>
                           <th className="py-3.5 px-3">Invité</th>
                           <th className="py-3.5 px-3">Parcours</th>
-                          <th className="py-3.5 px-3">Présence</th>
+                          <th className="py-3.5 px-3">Présence &amp; Accompagnants</th>
+                          <th className="py-3.5 px-3">Mot doux</th>
                           <th className="py-3.5 px-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10 text-sm">
-                        {filteredRsvps.map((guest) => (
-                          <tr key={guest.id} className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 px-3 text-xs text-stone-400">{new Date(guest.createdAt).toLocaleDateString('fr-BE')}</td>
-                            <td className="py-4 px-3">
-                              <div className="font-semibold text-amber-100">{guest.prenom} {guest.nom}</div>
-                              <div className="text-xs text-stone-400">{guest.email}</div>
-                            </td>
-                            <td className="py-4 px-3">{guest.parcours}</td>
-                            <td className="py-4 px-3">{guest.presence ? 'Présent' : 'Absent'}</td>
-                            <td className="py-4 px-3 text-right">
-                              <button onClick={() => setDeleteConfirmId(guest.id)} className="p-2 rounded-xl bg-white/5 hover:bg-rose-500/25 text-stone-400 hover:text-rose-300">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                        {filteredRsvps.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-stone-400">
+                              Aucune réponse enregistrée pour le moment.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          filteredRsvps.map((guest) => (
+                            <tr key={guest.id} className="hover:bg-white/5 transition-colors">
+                              <td className="py-4 px-3 text-xs text-stone-400 whitespace-nowrap">
+                                {guest.createdAt ? new Date(guest.createdAt).toLocaleDateString('fr-BE') : '—'}
+                              </td>
+                              <td className="py-4 px-3">
+                                <div className="font-semibold text-amber-100">{guest.prenom} {guest.nom}</div>
+                                <div className="text-xs text-stone-400">{guest.email}</div>
+                              </td>
+                              <td className="py-4 px-3 whitespace-nowrap">
+                                {guest.parcours === 'journee' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/15 border border-amber-300/35 text-amber-200 text-xs">
+                                    <Sun className="w-3 h-3" />
+                                    <span>Journée &amp; VH</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/15 border border-orange-400/35 text-orange-200 text-xs">
+                                    <Sunset className="w-3 h-3" />
+                                    <span>Repas Soir</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-4 px-3 whitespace-nowrap">
+                                {guest.presence ? (
+                                  <div className="space-y-1">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-medium">
+                                      <Check className="w-3 h-3" />
+                                      <span>{getGuestTotalPersons(guest)} pers.</span>
+                                    </span>
+                                    {Array.isArray(guest.accompagnantsList) && guest.accompagnantsList.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 max-w-xs">
+                                        {guest.accompagnantsList.map((acc, idx) => (
+                                          <span key={idx} className="px-2 py-0.5 rounded-md bg-white/10 text-amber-100 text-[11px]">
+                                            {acc.prenom} {acc.nom}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/20 border border-rose-400/40 text-rose-300 text-xs font-medium">
+                                    <X className="w-3 h-3" />
+                                    <span>Absent(e)</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-4 px-3 max-w-xs">
+                                {guest.motDoux ? (
+                                  <span className="text-xs text-stone-200 italic">« {guest.motDoux} »</span>
+                                ) : (
+                                  <span className="text-xs text-stone-500">—</span>
+                                )}
+                              </td>
+                              <td className="py-4 px-3 text-right whitespace-nowrap">
+                                <button
+                                  onClick={() => setDeleteConfirmId(guest.id)}
+                                  className="p-2 rounded-xl bg-white/5 hover:bg-rose-500/25 text-stone-400 hover:text-rose-300 transition-colors cursor-pointer"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modale suppression */}
+            {deleteConfirmId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+                <div className="max-w-sm w-full rounded-3xl bg-stone-900 border border-rose-400/40 p-6 text-center space-y-4 shadow-2xl">
+                  <h3 className="font-serif-luxury text-2xl text-white">Supprimer cette réponse ?</h3>
+                  <div className="flex items-center gap-3 pt-2">
+                    <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-2.5 rounded-xl bg-white/10 text-stone-200 text-xs cursor-pointer">
+                      Annuler
+                    </button>
+                    <button onClick={() => handleDeleteRsvp(deleteConfirmId)} className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white text-xs font-semibold cursor-pointer">
+                      Confirmer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modale d'ajout manuel */}
+            {showAddModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+                <div className="max-w-md w-full rounded-3xl bg-stone-900 border border-amber-200/35 p-6 sm:p-8 shadow-2xl">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="font-serif-luxury text-2xl text-amber-100 font-semibold">Ajouter un invité</h3>
+                    <button onClick={() => setShowAddModal(false)} className="p-1.5 rounded-full bg-white/10 text-stone-300 cursor-pointer">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddManualGuest} className="space-y-4 text-xs">
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Prénom *"
+                        value={manualGuest.prenom}
+                        onChange={(e) => setManualGuest({ ...manualGuest, prenom: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-white"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nom *"
+                        value={manualGuest.nom}
+                        onChange={(e) => setManualGuest({ ...manualGuest, nom: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-white"
+                      />
+                    </div>
+                    <input
+                      type="email"
+                      placeholder="Email (facultatif)"
+                      value={manualGuest.email}
+                      onChange={(e) => setManualGuest({ ...manualGuest, email: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-white"
+                    />
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2.5 rounded-xl bg-white/10 text-stone-300 cursor-pointer">
+                        Annuler
+                      </button>
+                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold cursor-pointer">
+                        Enregistrer
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             )}
