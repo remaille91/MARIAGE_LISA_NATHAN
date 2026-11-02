@@ -671,7 +671,7 @@ export default function App() {
   // ==========================================
   // SOUMISSION DU FORMULAIRE RSVP
   // ==========================================
-  const handleRsvpSubmit = async (e) => {
+ const handleRsvpSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
 
@@ -687,6 +687,70 @@ export default function App() {
       setFormError('Veuillez indiquer si vous serez présent(e) ou non.');
       return;
     }
+
+    const accompagnantsCount = rsvpForm.presence ? Math.max(0, Number(rsvpForm.accompagnants) || 0) : 0;
+    const cleanedAccompagnantsList = rsvpForm.presence
+      ? (rsvpForm.accompagnantsList || []).slice(0, accompagnantsCount).map((a) => ({
+          prenom: (a.prenom || '').trim(),
+          nom: (a.nom || '').trim()
+        }))
+      : [];
+
+    if (rsvpForm.presence && accompagnantsCount > 0) {
+      const hasMissingName = cleanedAccompagnantsList.some((a) => !a.prenom || !a.nom);
+      if (hasMissingName || cleanedAccompagnantsList.length < accompagnantsCount) {
+        setFormError('Veuillez renseigner le prénom et le nom de chaque accompagnant.');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
+    const totalPersonnes = rsvpForm.presence ? 1 + accompagnantsCount : 0;
+
+    const newEntry = {
+      prenom: rsvpForm.prenom.trim(),
+      nom: rsvpForm.nom.trim(),
+      email: rsvpForm.email.trim(),
+      presence: rsvpForm.presence,
+      accompagnants: accompagnantsCount,
+      accompagnantsList: cleanedAccompagnantsList,
+      nbPersonnes: totalPersonnes,
+      parcours: invitationMode,
+      motDoux: rsvpForm.motDoux.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      // 1. Enregistrement dans Firebase / Firestore
+      if (user && db) {
+        const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'rsvp_reponses');
+        const docRef = await addDoc(colRef, newEntry);
+        newEntry.id = docRef.id;
+      } else {
+        newEntry.id = 'local-' + Date.now();
+        setRsvps((prev) => [newEntry, ...prev]);
+      }
+
+      // 2. Appel de l'API Resend pour déclencher l'envoi des e-mails
+      try {
+        await fetch('/api/send-rsvp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newEntry)
+        });
+      } catch (emailErr) {
+        console.error('Erreur lors de l’envoi de l’email via l’API:', emailErr);
+      }
+
+      setSubmittedRsvp(newEntry);
+    } catch (error) {
+      console.error('Erreur enregistrement RSVP:', error);
+      setFormError('Une erreur est survenue lors de l’enregistrement. Veuillez réessayer.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
     const accompagnantsCount = rsvpForm.presence ? Math.max(0, Number(rsvpForm.accompagnants) || 0) : 0;
     const cleanedAccompagnantsList = rsvpForm.presence
