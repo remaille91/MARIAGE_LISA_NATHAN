@@ -160,6 +160,7 @@ class SunsetAudioEngine {
     this.isPlaying = false;
     this.masterGain = null;
     this.intervalId = null;
+    this.chordIndex = 0;
   }
 
   init() {
@@ -173,7 +174,7 @@ class SunsetAudioEngine {
   }
 
   playNote(freq, duration, delay = 0, volume = 0.04, type = 'sine') {
-    if (!this.ctx || !this.isPlaying) return;
+    if (!this.ctx || !this.isPlaying || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const noteGain = this.ctx.createGain();
@@ -192,44 +193,50 @@ class SunsetAudioEngine {
     osc.stop(now + duration + 0.1);
   }
 
-  start() {
+  triggerBar() {
+    if (!this.isPlaying || !this.ctx || this.ctx.state !== 'running') return;
+    const chords = [
+      [174.61, 220.0, 261.63, 329.63, 392.0],
+      [196.0, 246.94, 293.66, 329.63, 392.0],
+      [164.81, 246.94, 293.66, 392.0, 493.88],
+      [220.0, 261.63, 329.63, 392.0, 493.88]
+    ];
+
+    const chord = chords[this.chordIndex % chords.length];
+    this.chordIndex++;
+
+    this.playNote(chord[0] / 2, 6.5, 0, 0.05, 'sine');
+    this.playNote(chord[0], 6.0, 0.1, 0.04, 'triangle');
+    this.playNote(chord[2], 5.8, 0.2, 0.03, 'sine');
+
+    chord.forEach((note, idx) => {
+      this.playNote(note * 2, 3.8, idx * 0.9 + 0.3, 0.022, 'sine');
+    });
+  }
+
+  async start() {
     try {
       this.init();
       if (this.ctx.state === 'suspended') {
-        this.ctx.resume();
+        await this.ctx.resume();
       }
-      this.isPlaying = true;
-      this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.masterGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
-      this.masterGain.gain.linearRampToValueAtTime(0.35, this.ctx.currentTime + 2.0);
+      if (this.ctx.state !== 'running') {
+        return false;
+      }
 
-      const chords = [
-        [174.61, 220.0, 261.63, 329.63, 392.0],
-        [196.0, 246.94, 293.66, 329.63, 392.0],
-        [164.81, 246.94, 293.66, 392.0, 493.88],
-        [220.0, 261.63, 329.63, 392.0, 493.88]
-      ];
+      if (!this.isPlaying) {
+        this.isPlaying = true;
+        this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.masterGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+        this.masterGain.gain.linearRampToValueAtTime(0.35, this.ctx.currentTime + 1.5);
 
-      let chordIndex = 0;
-
-      const triggerBar = () => {
-        if (!this.isPlaying) return;
-        const chord = chords[chordIndex % chords.length];
-        chordIndex++;
-
-        this.playNote(chord[0] / 2, 6.5, 0, 0.05, 'sine');
-        this.playNote(chord[0], 6.0, 0.1, 0.04, 'triangle');
-        this.playNote(chord[2], 5.8, 0.2, 0.03, 'sine');
-
-        chord.forEach((note, idx) => {
-          this.playNote(note * 2, 3.8, idx * 0.9 + 0.3, 0.022, 'sine');
-        });
-      };
-
-      triggerBar();
-      this.intervalId = setInterval(triggerBar, 5200);
+        this.triggerBar();
+        if (this.intervalId) clearInterval(this.intervalId);
+        this.intervalId = setInterval(() => this.triggerBar(), 5200);
+      }
+      return true;
     } catch (e) {
-      console.error('Audio play error:', e);
+      return false;
     }
   }
 
@@ -242,7 +249,7 @@ class SunsetAudioEngine {
     if (this.ctx && this.masterGain) {
       const now = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);
-      this.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.6);
+      this.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.4);
     }
   }
 }
@@ -397,53 +404,46 @@ export default function App() {
   };
 
   // ==========================================
-  // AUDIO & SYNCHRONISATION FLUIDE DU SOLEIL AU SCROLL
+  // AUDIO : DÉMARRAGE AUTOMATIQUE OU AU 1ER GESTE
   // ==========================================
   useEffect(() => {
     let userManuallyMuted = false;
 
-    const startAndSyncAudio = () => {
-      if (userManuallyMuted) return;
-      try {
-        if (!audioEngine.isPlaying) {
-          audioEngine.start();
-        } else if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
-          audioEngine.ctx.resume();
-        }
-        setIsAudioPlaying(true);
-      } catch {
-        // Autoplay bloqué jusqu'au premier clic
-      }
+    const removeUnlockListeners = () => {
+      window.removeEventListener('pointerdown', unlockOnFirstGesture);
+      window.removeEventListener('touchstart', unlockOnFirstGesture);
+      window.removeEventListener('wheel', unlockOnFirstGesture);
+      window.removeEventListener('keydown', unlockOnFirstGesture);
     };
 
-    startAndSyncAudio();
+    const tryPlayAudio = async () => {
+      if (userManuallyMuted) return;
+      const started = await audioEngine.start();
+      if (started) {
+        setIsAudioPlaying(true);
+        removeUnlockListeners();
+      }
+    };
 
     const unlockOnFirstGesture = (e) => {
       if (e && e.target && e.target.closest && e.target.closest('[data-audio-toggle="true"]')) {
-        userManuallyMuted = true;
+        removeUnlockListeners();
         return;
       }
-      if (!userManuallyMuted) {
-        if (!audioEngine.isPlaying) {
-          audioEngine.start();
-        } else if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
-          audioEngine.ctx.resume();
-        }
-        setIsAudioPlaying(true);
-      }
-      window.removeEventListener('pointerdown', unlockOnFirstGesture);
-      window.removeEventListener('touchstart', unlockOnFirstGesture);
-      window.removeEventListener('keydown', unlockOnFirstGesture);
+      tryPlayAudio();
     };
 
+    // Tentative immédiate à l'ouverture
+    tryPlayAudio();
+
+    // Déverrouillage dès que l'utilisateur touche l'écran, clique ou scrolle
     window.addEventListener('pointerdown', unlockOnFirstGesture, { passive: true });
     window.addEventListener('touchstart', unlockOnFirstGesture, { passive: true });
+    window.addEventListener('wheel', unlockOnFirstGesture, { passive: true });
     window.addEventListener('keydown', unlockOnFirstGesture, { passive: true });
 
     return () => {
-      window.removeEventListener('pointerdown', unlockOnFirstGesture);
-      window.removeEventListener('touchstart', unlockOnFirstGesture);
-      window.removeEventListener('keydown', unlockOnFirstGesture);
+      removeUnlockListeners();
     };
   }, []);
 
@@ -499,13 +499,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const toggleAudio = () => {
-    if (isAudioPlaying || audioEngine.isPlaying) {
+  const toggleAudio = async () => {
+    if (audioEngine.isPlaying && audioEngine.ctx && audioEngine.ctx.state === 'running') {
       audioEngine.stop();
       setIsAudioPlaying(false);
     } else {
-      audioEngine.start();
-      setIsAudioPlaying(true);
+      const started = await audioEngine.start();
+      setIsAudioPlaying(started);
     }
   };
 
@@ -877,7 +877,6 @@ export default function App() {
             'linear-gradient(180deg, #9A2B17 0%, #C84B20 24%, #E67E22 50%, #F5B041 68%, #D35400 82%, #6E2314 100%)'
         }}
       >
-        {/* Halo atmosphérique synchronisé sans lag */}
         <div
           className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] h-[24rem] sm:w-[38rem] sm:h-[38rem] rounded-full blur-3xl opacity-65 will-change-transform"
           style={{
@@ -887,7 +886,6 @@ export default function App() {
           }}
         />
 
-        {/* Soleil vectoriel synchronisé en temps réel avec le scroll */}
         <div
           className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 will-change-transform"
           style={{ top: `${sunTopPercent}%` }}
@@ -988,7 +986,7 @@ export default function App() {
           ) : (
             <>
               <VolumeX className="w-4 h-4 text-amber-200" />
-              <span className="text-[11px] sm:text-xs font-medium tracking-wide hero-text-shadow">Son coupé</span>
+              <span className="text-[11px] sm:text-xs font-medium tracking-wide hero-text-shadow">Activer le son</span>
             </>
           )}
         </button>
@@ -1490,6 +1488,7 @@ export default function App() {
               </div>
             </section>
 
+            {/* PIED DE PAGE AVEC LIEN RM BOOTH ET BALISE </main> FERMÉE */}
             <footer className="py-10 px-4 text-center relative z-10 glass-light border-t border-amber-100/20 hero-text-shadow">
               <p className="font-serif-luxury text-3xl text-white mb-1">Lisa &amp; Nathan</p>
               <p className="text-[11px] uppercase tracking-[0.25em] text-amber-100/90 mb-5">
@@ -1516,10 +1515,11 @@ export default function App() {
                   <span>Vous aussi, créez un site sur mesure pour vos faire-part de mariage</span>
                   <ExternalLink className="w-3 h-3 opacity-75 shrink-0" />
                 </a>
-             </div>
-    </footer>
-) : (
-/* BACKOFFICE MARIÉS (/admin) */
+              </div>
+            </footer>
+          </main>
+        ) : (
+          /* BACKOFFICE MARIÉS (/admin) */
           <section className="relative z-10 min-h-screen pt-4 pb-28 sm:py-10 px-3.5 sm:px-8 max-w-6xl mx-auto">
             <div className="flex items-center justify-between gap-2 mb-5 sm:mb-8">
               <button
