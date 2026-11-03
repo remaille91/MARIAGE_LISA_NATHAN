@@ -18,20 +18,48 @@ async function kvCommand(command) {
   return response.json();
 }
 
+function getUtcStart(timeStr, isJournee) {
+  const match = String(timeStr || '').match(/(\d{1,2})[h:](\d{2})/i);
+  if (!match) return isJournee ? '20270501T123000Z' : '20270501T170000Z';
+  const hourUtc = Math.max(0, parseInt(match[1], 10) - 2);
+  return `20270501T${String(hourUtc).padStart(2, '0')}${match[2]}00Z`;
+}
+
 export default async function handler(req, res) {
   try {
-    // 1. Récupérer toutes les réponses depuis Upstash Redis
-    const data = await kvCommand(['LRANGE', 'rsvps_lisa_nathan', 0, -1]);
-    const allRsvps = data && Array.isArray(data.result)
-      ? data.result.map((item) => JSON.parse(item))
-      : [];
+    // 1. Si l'appel vient du bouton Backoffice, on sauvegarde la dernière version du programme dans Redis
+    let activeSchedule = req.body && req.body.scheduleData ? req.body.scheduleData : null;
+    if (activeSchedule) {
+      await kvCommand(['SET', 'schedule_lisa_nathan', JSON.stringify(activeSchedule)]);
+    } else {
+      const savedSched = await kvCommand(['GET', 'schedule_lisa_nathan']);
+      if (savedSched && savedSched.result) {
+        try {
+          activeSchedule = JSON.parse(savedSched.result);
+        } catch (e) {
+          activeSchedule = null;
+        }
+      }
+    }
 
-    // 2. Filtrer les invités PRÉSENTS qui n'ont PAS ENCORE reçu le mail J-7
+    // 2. Récupérer tous les invités depuis Upstash Redis
+    const data = await kvCommand(['LRANGE', 'rsvps_lisa_nathan', 0, -1]);
+    const allRsvps =
+      data && Array.isArray(data.result)
+        ? data.result.map((item) => JSON.parse(item))
+        : [];
+
+    // 3. Filtrer uniquement les invités PRÉSENTS qui n'ont PAS ENCORE reçu le rappel J-7
     const pendingGuests = allRsvps.filter(
-      (g) => g.presence === true && !g.reminderSent && g.email && g.email.includes('@') && !g.email.includes('non-renseigne')
+      (g) =>
+        g.presence === true &&
+        !g.reminderSent &&
+        g.email &&
+        g.email.includes('@') &&
+        !g.email.includes('non-renseigne')
     );
 
-    // Lot quotidien max : 80 emails (pour rester sous la limite gratuite de 100/jour de Resend)
+    // Limite stricte de 80 e-mails par jour (sous le quota gratuit de 100/jour de Resend)
     const DAILY_BATCH_LIMIT = 80;
     const batchToSend = pendingGuests.slice(0, DAILY_BATCH_LIMIT);
 
@@ -40,7 +68,7 @@ export default async function handler(req, res) {
         success: true,
         sentCount: 0,
         remainingCount: 0,
-        message: 'Tous les invités présents ont déjà reçu leur e-mail de récapitulatif !'
+        message: 'Tous les invités présents ont déjà reçu leur e-mail de récapitulatif J-7 !'
       });
     }
 
@@ -52,30 +80,39 @@ export default async function handler(req, res) {
     let sentCount = 0;
     const sentIds = new Set();
 
-    // 3. Envoyer l'email personnalisé selon le parcours (Journée 14h30 vs Repas 19h00)
+    // 4. Envoi personnalisé selon le parcours de chaque invité (Journée vs Repas du soir)
     for (const guest of batchToSend) {
       const isJournee = guest.parcours === 'journee';
-      const heureArrivee = isJournee ? '14h30' : '19h00';
+      const steps =
+        (activeSchedule && activeSchedule[guest.parcours]) ||
+        guest.scheduleSnapshot ||
+        (isJournee
+          ? [
+              { time: '14h30', title: 'Accueil des Invités' },
+              { time: '15h00', title: 'Cérémonie' },
+              { time: '16h30', title: 'Vin d’honneur & Cocktail' },
+              { time: '19h00', title: 'Dîner & Festivités' },
+              { time: '22h30', title: 'Ouverture du Bal & Soirée' }
+            ]
+          : [
+              { time: '19h00', title: 'Accueil & Dîner de Mariage' },
+              { time: '21h30', title: 'Pièce Montée & Animations' },
+              { time: '22h30', title: 'Ouverture du Bal & Soirée' }
+            ]);
+
+      const heureArrivee = steps[0]?.time || (isJournee ? '14h30' : '19h00');
+      const programmeHtml = steps
+        .map((s) => `<strong>${s.time} :</strong> ${s.title}${s.subtitle ? ` — <em>${s.subtitle}</em>` : ''}`)
+        .join('<br/>');
+
       const totalPersonnes = 1 + (Number(guest.accompagnants) || 0);
       const googleCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
         'Mariage de Lisa & Nathan'
-      )}&dates=${isJournee ? '20270501T123000Z' : '20270501T170000Z'}/20270502T010000Z&location=${encodeURIComponent(
+      )}&dates=${getUtcStart(heureArrivee, isJournee)}/20270502T010000Z&details=${encodeURIComponent(
+        `Mariage de Lisa & Nathan — Rendez-vous dès ${heureArrivee}. Dress code : Palette Coucher de Soleil.`
+      )}&location=${encodeURIComponent(
         'Domaine du Moulin al Poudre, Chemin du Moulin al Poudre 2, 1435 Mont-Saint-Guibert, Belgique'
       )}`;
-
-      const programmeHtml = isJournee
-        ? `
-          <strong>14h30 :</strong> Accueil des invités<br/>
-          <strong>15h00 :</strong> Cérémonie &amp; échange des vœux<br/>
-          <strong>16h30 :</strong> Vin d’honneur &amp; Cocktail<br/>
-          <strong>19h00 :</strong> Dîner &amp; Festivités<br/>
-          <strong>22h30 :</strong> Ouverture du bal &amp; Soirée
-        `
-        : `
-          <strong>19h00 :</strong> Accueil, cocktail de bienvenue &amp; Dîner de mariage<br/>
-          <strong>21h30 :</strong> Pièce montée &amp; Animations<br/>
-          <strong>22h30 :</strong> Ouverture du bal &amp; Soirée
-        `;
 
       try {
         await resend.emails.send({
@@ -94,7 +131,7 @@ export default async function handler(req, res) {
                   Plus qu’une petite semaine avant le grand jour ! Nous avons terriblement hâte de vous retrouver le <strong>samedi 1er mai 2027</strong> pour célébrer notre mariage. Voici votre récapitulatif pratique :
                 </p>
 
-                <!-- Encadré central Horaire sur-mesure -->
+                <!-- Encadré Horaire personnalisé -->
                 <div style="border: 1px solid #ece8e1; border-radius: 14px; padding: 26px 20px; text-align: center; margin-bottom: 28px; background-color: #fdfcfb;">
                   <div style="font-family: Arial, sans-serif; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #57534e; margin-bottom: 12px;">
                     VOTRE HEURE D’ARRIVÉE
@@ -107,7 +144,7 @@ export default async function handler(req, res) {
                   </div>
                 </div>
 
-                <!-- Boutons Itinéraire & Calendrier -->
+                <!-- Boutons Itinéraire & Agenda -->
                 <div style="text-align: center; margin-bottom: 30px;">
                   <a href="${mapsUrl}" target="_blank" style="display: inline-block; background-color: #14171f; color: #e5b95c; text-decoration: none; font-family: Arial, sans-serif; font-weight: bold; font-size: 13px; padding: 13px 22px; border-radius: 10px; border: 1.5px solid #b8862d; margin: 4px;">
                     Itinéraire Google Maps
@@ -121,7 +158,7 @@ export default async function handler(req, res) {
                   </a>
                 </div>
 
-                <!-- Programme personnalisé selon Journée ou Repas -->
+                <!-- Programme dynamique -->
                 <div style="font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; letter-spacing: 2.5px; text-transform: uppercase; color: #b8862d; margin-bottom: 8px;">
                   VOTRE PROGRAMME DU 1ER MAI
                 </div>
@@ -139,9 +176,15 @@ export default async function handler(req, res) {
                   <strong>Dress code :</strong> Palette Coucher de Soleil (une touche ou tenue complète du jaune doré à l’orange couchant).
                 </p>
 
-                <p style="font-size: 14px; font-style: italic; color: #57534e; margin-top: 28px; margin-bottom: 0;">
+                <p style="font-size: 14px; font-style: italic; color: #57534e; margin-top: 28px; margin-bottom: 24px;">
                   À samedi prochain ! Avec toute notre affection, Lisa &amp; Nathan.
                 </p>
+
+                <div style="border-top: 1px solid #f0ede6; padding-top: 16px; text-align: center;">
+                  <a href="https://www.rmbooth.com" target="_blank" style="font-family: Arial, sans-serif; font-size: 11px; color: #a8a29e; text-decoration: underline;">
+                    Vous aussi, créez un site sur mesure pour vos faire-part de mariage — www.rmbooth.com
+                  </a>
+                </div>
               </div>
             </div>
           `
@@ -154,9 +197,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Mettre à jour la base Redis pour marquer ces invités comme "reminderSent: true"
+    // 5. Sauvegarder dans Redis que ces invités ont bien reçu leur rappel (reminderSent: true)
     const updatedAllRsvps = allRsvps.map((r) =>
-      sentIds.has(r.id) ? { ...r, reminderSent: true, reminderSentAt: new Date().toISOString() } : r
+      sentIds.has(r.id)
+        ? { ...r, reminderSent: true, reminderSentAt: new Date().toISOString() }
+        : r
     );
 
     await kvCommand(['DEL', 'rsvps_lisa_nathan']);
@@ -170,10 +215,10 @@ export default async function handler(req, res) {
       success: true,
       sentCount,
       remainingCount,
-      message: `${sentCount} e-mail(s) envoyé(s) aujourd'hui. Il reste ${remainingCount} invité(s) à notifier sur les prochains jours.`
+      message: `${sentCount} e-mail(s) de rappel envoyé(s) aujourd'hui. Il reste ${remainingCount} invité(s) à notifier sur les prochains jours.`
     });
   } catch (error) {
-    console.error('Erreur globale send-reminders:', error);
+    console.error('Erreur globale API send-reminders:', error);
     return res.status(500).json({ error: error.message });
   }
 }
