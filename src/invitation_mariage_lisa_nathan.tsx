@@ -94,8 +94,11 @@ const DRESSCODE_SWATCHES = [
   }
 ];
 
-// Planning selon le parcours
-const SCHEDULE_DATA = {
+// ============================================================================
+// SOURCE UNIQUE DU PROGRAMME (Modifiez ici : le site, les calendriers et les
+// e-mails de confirmation / rappel J-7 se mettront à jour automatiquement !)
+// ============================================================================
+export const SCHEDULE_DATA = {
   journee: [
     {
       time: '14h30',
@@ -149,6 +152,17 @@ const SCHEDULE_DATA = {
       icon: 'party'
     }
   ]
+};
+
+// Convertit une heure "14h30" en format UTC "20270501T123000Z" (Belgique = UTC+2 en mai)
+const getUtcStartFromSchedule = (mode) => {
+  const steps = SCHEDULE_DATA[mode] || SCHEDULE_DATA.journee;
+  const firstTime = steps[0]?.time || (mode === 'journee' ? '14h30' : '19h00');
+  const match = firstTime.match(/(\d{1,2})[h:](\d{2})/i);
+  if (!match) return mode === 'journee' ? '20270501T123000Z' : '20270501T170000Z';
+  const hourUtc = Math.max(0, parseInt(match[1], 10) - 2);
+  const min = match[2];
+  return `20270501T${String(hourUtc).padStart(2, '0')}${min}00Z`;
 };
 
 // ==========================================
@@ -308,9 +322,10 @@ export default function App() {
   const [adminMobileTab, setAdminMobileTab] = useState('guests');
   const [adminSearch, setAdminSearch] = useState('');
   const [adminFilter, setAdminFilter] = useState('all');
-  const [selectedGuestModal, setSelectedGuestModal] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [reminderStatus, setReminderStatus] = useState('');
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
   const [manualGuest, setManualGuest] = useState({
     prenom: '',
     nom: '',
@@ -368,32 +383,6 @@ export default function App() {
     });
   };
 
-  const handleManualAccompagnantsCountChange = (count) => {
-    const safeCount = Math.max(0, Math.min(10, Number(count) || 0));
-    setManualGuest((prev) => {
-      const currentList = Array.isArray(prev.accompagnantsList) ? [...prev.accompagnantsList] : [];
-      while (currentList.length < safeCount) {
-        currentList.push({ prenom: '', nom: '' });
-      }
-      return {
-        ...prev,
-        accompagnants: safeCount,
-        accompagnantsList: currentList.slice(0, safeCount)
-      };
-    });
-  };
-
-  const handleManualAccompagnantFieldChange = (index, field, value) => {
-    setManualGuest((prev) => {
-      const updated = [...(prev.accompagnantsList || [])];
-      if (!updated[index]) {
-        updated[index] = { prenom: '', nom: '' };
-      }
-      updated[index] = { ...updated[index], [field]: value };
-      return { ...prev, accompagnantsList: updated };
-    });
-  };
-
   const getGuestTotalPersons = (guest) => {
     if (!guest || !guest.presence) return 0;
     if (typeof guest.nbPersonnes === 'number' && guest.nbPersonnes >= 1) {
@@ -433,10 +422,8 @@ export default function App() {
       tryPlayAudio();
     };
 
-    // Tentative immédiate à l'ouverture
     tryPlayAudio();
 
-    // Déverrouillage dès que l'utilisateur touche l'écran, clique ou scrolle
     window.addEventListener('pointerdown', unlockOnFirstGesture, { passive: true });
     window.addEventListener('touchstart', unlockOnFirstGesture, { passive: true });
     window.addEventListener('wheel', unlockOnFirstGesture, { passive: true });
@@ -531,6 +518,62 @@ export default function App() {
   };
 
   // ==========================================
+  // FONCTIONS CALENDRIER DYNAMIQUES (iOS & ANDROID)
+  // ==========================================
+  const getGoogleCalendarUrl = (mode = invitationMode) => {
+    const steps = SCHEDULE_DATA[mode] || SCHEDULE_DATA.journee;
+    const start = getUtcStartFromSchedule(mode);
+    const end = '20270502T010000Z';
+    const programmeLines = steps.map((s) => `• ${s.time} : ${s.title}`).join('\n');
+    const title = encodeURIComponent('Mariage de Lisa & Nathan');
+    const details = encodeURIComponent(
+      `Nous avons hâte de célébrer notre mariage à vos côtés !\n\nProgramme :\n${programmeLines}\n\nDress code : Palette Coucher de Soleil.`
+    );
+    const location = encodeURIComponent(
+      'Domaine du Moulin al Poudre, Chemin du Moulin al Poudre 2, 1435 Mont-Saint-Guibert, Belgique'
+    );
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`;
+  };
+
+  const handleDownloadICS = (mode = invitationMode) => {
+    const steps = SCHEDULE_DATA[mode] || SCHEDULE_DATA.journee;
+    const start = getUtcStartFromSchedule(mode);
+    const end = '20270502T010000Z';
+    const programmeText = steps.map((s) => `${s.time} : ${s.title}`).join('\\n');
+    const desc = `Nous avons hâte de célébrer notre mariage à vos côtés !\\n\\nProgramme :\\n${programmeText}\\n\\nDress code : Palette Coucher de Soleil.`;
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Lisa et Nathan//Mariage 2027//FR',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      'UID:mariage-lisa-nathan-2027@lisaetnathan.site',
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      'SUMMARY:Mariage de Lisa & Nathan',
+      `DESCRIPTION:${desc}`,
+      'LOCATION:Domaine du Moulin al Poudre\\, Chemin du Moulin al Poudre 2\\, 1435 Mont-Saint-Guibert\\, Belgique',
+      'BEGIN:VALARM',
+      'TRIGGER:-P7D',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Rappel : Le mariage de Lisa & Nathan est dans une semaine !',
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', 'mariage-lisa-nathan.ics');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ==========================================
   // SOUMISSION DU FORMULAIRE RSVP
   // ==========================================
   const handleRsvpSubmit = async (e) => {
@@ -580,6 +623,7 @@ export default function App() {
       accompagnantsList: cleanedAccompagnantsList,
       nbPersonnes: totalPersonnes,
       parcours: invitationMode,
+      scheduleSnapshot: SCHEDULE_DATA[invitationMode],
       motDoux: rsvpForm.motDoux.trim(),
       createdAt: new Date().toISOString()
     };
@@ -687,6 +731,28 @@ export default function App() {
     }
   };
 
+  // Envoi d'un lot de 80 e-mails de rappel J-7 en transmettant le SCHEDULE_DATA à jour
+  const handleSendRemindersBatch = async () => {
+    setIsSendingReminders(true);
+    setReminderStatus('');
+    try {
+      const res = await fetch('/api/send-reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduleData: SCHEDULE_DATA })
+      });
+      const data = await res.json();
+      if (data.message) {
+        setReminderStatus(data.message);
+        fetchRsvpsFromServer();
+      }
+    } catch (err) {
+      setReminderStatus("Erreur lors de l'envoi du lot de rappels.");
+    } finally {
+      setIsSendingReminders(false);
+    }
+  };
+
   const handleExportCSV = () => {
     const headers = [
       'Date',
@@ -714,7 +780,7 @@ export default function App() {
         `"${(r.prenom || '').replace(/"/g, '""')}"`,
         `"${(r.nom || '').replace(/"/g, '""')}"`,
         `"${(r.email || '').replace(/"/g, '""')}"`,
-        r.parcours === 'journee' ? "Journée & Vin d'honneur (14h30)" : 'Repas du soir (19h00)',
+        r.parcours === 'journee' ? "Journée & Vin d'honneur" : 'Repas du soir',
         r.presence ? 'Présent(e)' : 'Absent(e)',
         acc,
         `"${accNames.replace(/"/g, '""')}"`,
@@ -779,7 +845,6 @@ export default function App() {
     });
   }, [rsvps, adminSearch, adminFilter]);
 
-  // Position verticale exacte et directe du soleil (de 14% en haut à 64% sur l'horizon marin en bas)
   const sunTopPercent = 14 + scrollProgress * 50;
 
   return (
@@ -1475,14 +1540,41 @@ export default function App() {
                       </button>
                     </form>
                   ) : (
-                    /* CONFIRMATION MINIMALISTE DEMANDÉE */
-                    <div className="text-center py-8 px-6 rounded-3xl glass-lighter border border-emerald-300/40 hero-text-shadow">
-                      <div className="w-14 h-14 rounded-full bg-emerald-400 text-stone-950 flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    /* CONFIRMATION MINIMALISTE + BOUTONS CALENDRIER iOS / ANDROID */
+                    <div className="text-center py-8 px-6 rounded-3xl glass-lighter border border-emerald-300/40 hero-text-shadow space-y-5">
+                      <div className="w-14 h-14 rounded-full bg-emerald-400 text-stone-950 flex items-center justify-center mx-auto shadow-lg">
                         <Check className="w-8 h-8 stroke-[2.5]" />
                       </div>
                       <h3 className="font-serif-luxury text-3xl sm:text-4xl text-white font-semibold">
                         On a bien reçu votre réponse !
                       </h3>
+
+                      {submittedRsvp.presence && (
+                        <div className="pt-4 border-t border-amber-100/20 space-y-3">
+                          <p className="text-xs uppercase tracking-widest text-amber-100 font-semibold">
+                            Ajouter la date à votre agenda
+                          </p>
+                          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadICS(submittedRsvp.parcours)}
+                              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-amber-200/40 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                            >
+                              <Calendar className="w-4 h-4 text-amber-200" />
+                              <span>Calendrier iPhone / Apple</span>
+                            </button>
+                            <a
+                              href={getGoogleCalendarUrl(submittedRsvp.parcours)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-300 via-amber-400 to-orange-500 text-amber-950 text-xs font-bold flex items-center justify-center gap-2 shadow-md hover:brightness-110 transition-all"
+                            >
+                              <Calendar className="w-4 h-4" />
+                              <span>Google Calendar (Android)</span>
+                            </a>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1594,32 +1686,51 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-5 sm:space-y-7">
-                <div className="rounded-3xl bg-stone-950/80 backdrop-blur-2xl border border-amber-200/30 p-5 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-amber-300 block">
-                      Backoffice Mariés • 1er Mai 2027
-                    </span>
-                    <h1 className="font-serif-luxury text-3xl sm:text-5xl text-amber-50 mt-0.5">
-                      Réponses &amp; Invités
-                    </h1>
+                <div className="rounded-3xl bg-stone-950/80 backdrop-blur-2xl border border-amber-200/30 p-5 sm:p-7 flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-amber-300 block">
+                        Backoffice Mariés • 1er Mai 2027
+                      </span>
+                      <h1 className="font-serif-luxury text-3xl sm:text-5xl text-amber-50 mt-0.5">
+                        Réponses &amp; Invités
+                      </h1>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        onClick={handleSendRemindersBatch}
+                        disabled={isSendingReminders}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-amber-200 text-xs sm:text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Mail className="w-4 h-4 text-amber-300" />
+                        <span>{isSendingReminders ? 'Envoi du lot...' : 'Envoyer lot rappel J-7 (max 80)'}</span>
+                      </button>
+                      <button
+                        onClick={() => setShowAddModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-amber-200/30 text-amber-100 text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 text-amber-300" />
+                        <span>Ajouter un invité</span>
+                      </button>
+                      <button
+                        onClick={handleExportCSV}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold text-xs sm:text-sm shadow-lg hover:brightness-110 transition-all cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Exporter CSV / Excel</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="hidden sm:flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={() => setShowAddModal(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-amber-200/30 text-amber-100 text-xs sm:text-sm font-medium transition-all cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4 text-amber-300" />
-                      <span>Ajouter un invité</span>
-                    </button>
-                    <button
-                      onClick={handleExportCSV}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-bold text-xs sm:text-sm shadow-lg hover:brightness-110 transition-all cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Exporter CSV / Excel</span>
-                    </button>
-                  </div>
+                  {reminderStatus && (
+                    <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/35 text-emerald-200 text-xs sm:text-sm flex items-center justify-between">
+                      <span>{reminderStatus}</span>
+                      <button onClick={() => setReminderStatus('')} className="text-emerald-300 hover:text-white ml-2 cursor-pointer">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Onglets Mobile */}
@@ -1687,7 +1798,9 @@ export default function App() {
                       <Sun className="w-4 h-4 text-amber-400" />
                     </div>
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-amber-200">{stats.journeePresents}</div>
-                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">Pers. dès 14h30</p>
+                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">
+                      Pers. dès {SCHEDULE_DATA.journee[0]?.time || '14h30'}
+                    </p>
                   </div>
 
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-200/25 p-4 sm:p-5">
@@ -1696,7 +1809,9 @@ export default function App() {
                       <Sunset className="w-4 h-4 text-orange-400" />
                     </div>
                     <div className="font-serif-luxury text-3xl sm:text-4xl font-bold text-orange-200">{stats.repasPresents}</div>
-                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">Pers. dès 19h00</p>
+                    <p className="text-[10px] sm:text-[11px] text-stone-400 mt-1">
+                      Pers. dès {SCHEDULE_DATA.repas[0]?.time || '19h00'}
+                    </p>
                   </div>
 
                   <div className="col-span-2 lg:col-span-1 rounded-3xl bg-rose-950/55 backdrop-blur-xl border border-rose-400/25 p-4 sm:p-5 flex lg:block items-center justify-between">
@@ -1711,7 +1826,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Partage des 2 liens ultra-discrets */}
+                {/* Partage des 2 liens ultra-discrets (SANS DOUBLON) */}
                 <div className={`${adminMobileTab === 'links' ? 'grid' : 'hidden sm:grid'} grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4`}>
                   <div className="rounded-3xl bg-stone-950/80 backdrop-blur-xl border border-amber-300/35 p-4 sm:p-5 flex flex-col justify-between gap-3.5">
                     <div>
@@ -1872,10 +1987,17 @@ export default function App() {
                               <td className="py-4 px-3 whitespace-nowrap">
                                 {guest.presence ? (
                                   <div className="space-y-1">
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-medium">
-                                      <Check className="w-3 h-3" />
-                                      <span>{getGuestTotalPersons(guest)} pers.</span>
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-medium">
+                                        <Check className="w-3 h-3" />
+                                        <span>{getGuestTotalPersons(guest)} pers.</span>
+                                      </span>
+                                      {guest.reminderSent && (
+                                        <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200 text-[10px]">
+                                          Rappel J-7 envoyé
+                                        </span>
+                                      )}
+                                    </div>
                                     {Array.isArray(guest.accompagnantsList) && guest.accompagnantsList.length > 0 && (
                                       <div className="flex flex-wrap gap-1 max-w-xs">
                                         {guest.accompagnantsList.map((acc, idx) => (
@@ -1972,6 +2094,24 @@ export default function App() {
                       onChange={(e) => setManualGuest({ ...manualGuest, email: e.target.value })}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-white"
                     />
+                    <div className="grid grid-cols-2 gap-3">
+                      <select
+                        value={manualGuest.parcours}
+                        onChange={(e) => setManualGuest({ ...manualGuest, parcours: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-stone-800 border border-white/15 text-white"
+                      >
+                        <option value="journee">Journée &amp; VH</option>
+                        <option value="repas">Repas du Soir</option>
+                      </select>
+                      <select
+                        value={manualGuest.presence ? 'present' : 'absent'}
+                        onChange={(e) => setManualGuest({ ...manualGuest, presence: e.target.value === 'present' })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-stone-800 border border-white/15 text-white"
+                      >
+                        <option value="present">Présent(e)</option>
+                        <option value="absent">Absent(e)</option>
+                      </select>
+                    </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2.5 rounded-xl bg-white/10 text-stone-300 cursor-pointer">
                         Annuler
